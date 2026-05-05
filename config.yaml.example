@@ -39,5 +39,11 @@ telegram:
   #   - 123456789
 
 
+admin:
+  chat_id: null        # Your personal Telegram chat ID (find it via @userinfobot)
+  admin_only: false    # If true, only send signals to admin — not all registered users
+                       # Useful when setting up or testing before broadcasting to everyone
+
+
 data:
   db_path: "data/episodes.db"   # episode deduplication DB (separate from telegram-channel-monitor)

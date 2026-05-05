@@ -64,6 +64,8 @@ python main.py
 | `llm.model` | — | Model name (e.g. `qwen/qwen3.5-9b` for OpenRouter) |
 | `llm.timeout` | `360` | LLM request timeout in seconds |
 | `telegram.users_db_path` | — | Path to telegram-channel-monitor DB to inherit registered users |
+| `admin.chat_id` | `null` | Your personal Telegram chat ID (find via @userinfobot) |
+| `admin.admin_only` | `false` | When `true`, only the admin receives signals — useful while testing before broadcasting |
 
 Per-source overrides: `max_pages_per_scan`, `max_transcript_chars`, and `confidence_threshold` can all be set on individual sources to override the top-level defaults.
 

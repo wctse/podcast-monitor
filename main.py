@@ -9,7 +9,7 @@ import yaml
 
 from analyzer import LLMAnalyzer
 from db import has_any_episodes, init_db, is_processed, load_bot_users, mark_processed
-from notifier import send_signal
+from notifier import send_seed_report, send_signal
 from scraper import (
     extract_episode_links,
     extract_episode_title,
@@ -31,6 +31,12 @@ def _load_config(path: str = "config.yaml") -> dict:
 
 
 def _resolve_chat_ids(cfg: dict) -> list[int]:
+    admin_cfg = cfg.get("admin", {})
+    admin_id = admin_cfg.get("chat_id")
+    if admin_cfg.get("admin_only") and admin_id:
+        logger.info("Admin-only mode: sending to admin chat_id=%s only", admin_id)
+        return [int(admin_id)]
+
     tg = cfg.get("telegram", {})
     db_path = tg.get("users_db_path")
     if db_path:
@@ -62,6 +68,7 @@ async def _scan_podcast(
     analyzer: LLMAnalyzer,
     bot,
     chat_ids: list[int],
+    admin_chat_id: int | None = None,
 ):
     slug = (podcast.get("slug") or "").strip().lower()
     if not slug:
@@ -91,6 +98,8 @@ async def _scan_podcast(
         logger.info("First scan for %s: seeding %d episode(s) without analyzing", name, len(deduped))
         for url in deduped:
             mark_processed(slug, url, "", 0, db_path)
+        if admin_chat_id:
+            await send_seed_report(bot, admin_chat_id, name, deduped)
         return
 
     new_urls = [u for u in deduped if not is_processed(slug, u, db_path)]
@@ -167,6 +176,9 @@ async def main():
     from telegram import Bot
     bot = Bot(token=cfg["telegram"]["bot_token"])
     chat_ids = _resolve_chat_ids(cfg)
+    admin_chat_id = cfg.get("admin", {}).get("chat_id")
+    if admin_chat_id:
+        admin_chat_id = int(admin_chat_id)
 
     if not chat_ids:
         logger.warning("No chat IDs found — signals will not be sent")
@@ -200,6 +212,7 @@ async def main():
                         await _scan_podcast(
                             session, podcast, podcasts_cfg, db_path,
                             analyzer, bot, chat_ids,
+                            admin_chat_id=admin_chat_id,
                         )
                     except Exception as e:
                         logger.error("Scan failed for %s: %r", podcast.get("name"), e, exc_info=True)

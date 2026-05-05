@@ -60,3 +60,26 @@ async def send_signal(
             logger.info("Sent to chat_id=%d", chat_id)
         except Exception as e:
             logger.error("Failed to send to chat_id=%d: %s", chat_id, e)
+
+
+async def send_seed_report(
+    bot,
+    admin_chat_id: int,
+    podcast_name: str,
+    episode_urls: list[str],
+):
+    """Send a first-seeding summary to the admin."""
+    lines = [f"🌱 <b>First scan: {escape(podcast_name)}</b>"]
+    lines.append(f"Seeded {len(episode_urls)} existing episode(s) — these will not be analyzed.\n")
+    for url in episode_urls[:20]:
+        lines.append(f"• {url}")
+    if len(episode_urls) > 20:
+        lines.append(f"... and {len(episode_urls) - 20} more")
+    lines.append("\nMonitoring is now active. New episodes will be analyzed and forwarded.")
+
+    message = "\n".join(lines)
+    try:
+        await bot.send_message(chat_id=admin_chat_id, text=message, parse_mode="HTML")
+        logger.info("Sent seed report to admin chat_id=%d", admin_chat_id)
+    except Exception as e:
+        logger.error("Failed to send seed report to admin: %s", e)
