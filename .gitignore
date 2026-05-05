@@ -1,0 +1,19 @@
+# Sensitive config (contains bot token and API key)
+config.yaml
+
+# Database
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+venv/
+.venv/
+
+# Logs
+*.log
