@@ -1,0 +1,43 @@
+podcasts:
+  poll_interval_seconds: 3600        # how often to check for new episodes
+  max_pages_per_scan: 2              # index pages to scan per podcast
+  max_transcript_chars: 100000       # full episodes; tune down if LLM is slow/costly
+  http_timeout_seconds: 30
+  confidence_threshold: 0.7          # default; can override per source
+
+  sources:
+    - name: "The Compound and Friends"
+      slug: "the-compound-and-friends"
+      enabled: true
+      confidence_threshold: 0.7
+
+    # - name: "We Study Billionaires"
+    #   slug: "we-study-billionaires"
+    #   enabled: true
+
+
+llm:
+  provider: "api"                        # "api" for OpenRouter/Groq/OpenAI-compat, "ollama" for local
+  base_url: "https://openrouter.ai/api/v1"
+  model: "qwen/qwen3.5-9b"
+  api_key: ""                            # or set OPENROUTER_API_KEY env var and read below
+  timeout: 180                           # longer than Telegram monitor — full transcripts are big
+
+  # Optional: override the analysis prompt
+  # prompt: |
+  #   You are an investment research assistant...
+
+
+telegram:
+  bot_token: ""  # same token as telegram-channel-monitor
+
+  # Option A (recommended): point at the telegram-channel-monitor DB to share registered users
+  users_db_path: "../telegram-channel-monitor/data/messages.db"
+
+  # Option B: hardcode chat IDs directly (used if users_db_path is absent or not found)
+  # chat_ids:
+  #   - 123456789
+
+
+data:
+  db_path: "data/episodes.db"   # episode deduplication DB (separate from telegram-channel-monitor)
