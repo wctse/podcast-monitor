@@ -1,6 +1,7 @@
 import asyncio
 import html
 import re
+import xml.etree.ElementTree as ET
 
 import aiohttp
 
@@ -74,6 +75,61 @@ def extract_transcript(html_body: str) -> str | None:
         if body:
             parts.append(body)
     return "\n".join(parts).strip()
+
+
+def extract_rss_episode_items(xml_body: str) -> list[dict[str, str]]:
+    try:
+        root = ET.fromstring(xml_body)
+    except ET.ParseError:
+        return []
+
+    out: list[dict[str, str]] = []
+    for item in (e for e in root.iter() if _local_name(e.tag) == "item"):
+        title = (_find_xml_child_text(item, "title") or "").strip()
+        episode_url = (
+            _find_xml_child_text(item, "link")
+            or _find_xml_child_text(item, "guid")
+            or ""
+        ).strip()
+        audio_url = _find_enclosure_url(item)
+
+        if not audio_url:
+            continue
+        if not episode_url or not episode_url.startswith("http"):
+            episode_url = audio_url
+
+        out.append(
+            {
+                "episode_title": title or "Untitled Episode",
+                "episode_url": episode_url,
+                "audio_url": audio_url,
+            }
+        )
+    return out
+
+
+def _find_enclosure_url(item: ET.Element) -> str:
+    for child in list(item):
+        if _local_name(child.tag) != "enclosure":
+            continue
+        url = (child.attrib.get("url") or "").strip()
+        if url:
+            return url
+    return ""
+
+
+def _find_xml_child_text(parent: ET.Element, child_name: str) -> str:
+    for child in list(parent):
+        if _local_name(child.tag) != child_name:
+            continue
+        return (child.text or "").strip()
+    return ""
+
+
+def _local_name(tag: str) -> str:
+    if "}" in tag:
+        return tag.rsplit("}", 1)[-1].lower()
+    return tag.lower()
 
 
 def _html_to_text(html_body: str) -> str:

@@ -6,11 +6,6 @@ podcasts:
   confidence_threshold: 0.7          # default; can override per source
 
   sources:
-    - name: "The Compound and Friends"
-      slug: "the-compound-and-friends"
-      enabled: true
-      confidence_threshold: 0.7
-
     # - name: "We Study Billionaires"
     #   slug: "we-study-billionaires"
     #   enabled: true
@@ -26,6 +21,17 @@ llm:
   # Optional: override the analysis prompt
   # prompt: |
   #   You are an investment research assistant...
+
+
+deepgram:
+  api_key: ""                         # or set DEEPGRAM_API_KEY env var
+  model: "nova-2"
+  language: "en"
+  timeout_seconds: 900               # seconds to wait for Deepgram to transcribe the full episode
+  punctuate: true
+  paragraphs: true
+  smart_format: true
+  utterances: true
 
 
 telegram:

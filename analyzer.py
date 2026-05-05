@@ -82,40 +82,54 @@ class LLMAnalyzer:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": self.prompt},
-                {"role": "user", "content": user_content},
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
+        messages = [
+            {"role": "system", "content": self.prompt},
+            {"role": "user", "content": user_content},
+        ]
 
         if self.provider == "ollama":
             url = f"{self.base_url}/api/chat"
             payload = {
                 "model": self.model,
-                "messages": payload["messages"],
+                "messages": messages,
                 "stream": False,
                 "format": "json",
                 "options": {"temperature": 0.1},
             }
-        else:
-            url = f"{self.base_url}/chat/completions"
+            async with self._session.post(url, json=payload, headers=headers) as resp:
+                if resp.status != 200:
+                    logger.error("LLM API error %d: %s", resp.status, await resp.text())
+                    return None
+                data = await resp.json()
+            return data.get("message", {}).get("content", "")
 
+        # OpenAI-compatible: stream to avoid proxy timeouts on long transcripts
+        url = f"{self.base_url}/chat/completions"
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.1,
+            "stream": True,
+        }
         async with self._session.post(url, json=payload, headers=headers) as resp:
             if resp.status != 200:
                 logger.error("LLM API error %d: %s", resp.status, await resp.text())
                 return None
-            data = await resp.json()
-
-        if self.provider == "ollama":
-            return data.get("message", {}).get("content", "")
-        choices = data.get("choices", [])
-        if not choices:
-            return None
-        return choices[0].get("message", {}).get("content", "")
+            parts: list[str] = []
+            async for raw_line in resp.content:
+                line = raw_line.decode().strip()
+                if not line or line == "data: [DONE]":
+                    continue
+                if not line.startswith("data: "):
+                    continue
+                try:
+                    chunk = json.loads(line[6:])
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    if text := delta.get("content"):
+                        parts.append(text)
+                except (json.JSONDecodeError, IndexError):
+                    continue
+        return "".join(parts) or None
 
     @staticmethod
     def _parse(content: str) -> dict | None:

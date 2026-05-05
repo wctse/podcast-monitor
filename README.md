@@ -1,13 +1,13 @@
 # Podcast Monitor
 
-Polls podcast transcript sites for new episodes, runs them through an LLM to extract investment signals, and forwards results to Telegram.
+Polls podcast sources for new episodes, extracts transcripts, runs them through an LLM to extract investment signals, and forwards results to Telegram.
 
 Companion to [Telegram Channel Monitor](https://github.com/wctse/Telegram-channel-monitor). Shares the same bot and registered users — anyone who signed up there receives podcast alerts here too, with no separate registration.
 
 ## How it works
 
-1. Polls [podscripts.co](https://podscripts.co) for new episodes from configured podcasts
-2. Fetches and parses the episode transcript
+1. Polls configured podcast sources (Podscripts or RSS)
+2. Extracts transcripts via the source's configured method
 3. Sends the full transcript to an LLM (OpenRouter or Ollama) for single-pass analysis
 4. Forwards a digest to all registered Telegram users if the confidence threshold is met
 
@@ -35,7 +35,9 @@ Fill in `config.yaml`:
 
 **3. Add podcast sources**
 
-Edit the `podcasts.sources` list in `config.yaml`. Each source needs a `slug` matching the podcast's URL on podscripts.co:
+Edit the `podcasts.sources` list in `config.yaml`.
+
+For Podscripts-backed podcasts:
 
 ```yaml
 podcasts:
@@ -45,6 +47,32 @@ podcasts:
       enabled: true
       confidence_threshold: 0.7
 ```
+
+For RSS + Deepgram podcasts (e.g. Forward Guidance via Megaphone):
+
+```yaml
+podcasts:
+  sources:
+    - name: "Forward Guidance"
+      slug: "forward-guidance"
+      enabled: true
+      transcript_method: "rss_deepgram"
+      rss_url: "https://feeds.megaphone.fm/forwardguidance"
+      confidence_threshold: 0.7
+
+deepgram:
+  api_key: "6b97067ee132a7f05053e7e593e5d685b418b103"
+  model: "nova-2"
+  language: "en"
+  segment_seconds: 600
+  timeout_seconds: 180
+  punctuate: true
+  paragraphs: true
+  smart_format: true
+  utterances: true
+```
+
+`rss_deepgram` requires `ffmpeg` and `ffprobe` in your PATH for chunking and timestamp offset handling.
 
 **4. Run**
 
@@ -60,6 +88,11 @@ python main.py
 | `podcasts.max_pages_per_scan` | `2` | Pages of episode listings to scan per poll |
 | `podcasts.max_transcript_chars` | `100000` | Transcript length cap sent to LLM |
 | `podcasts.confidence_threshold` | `0.7` | Minimum confidence to forward a signal |
+| `podcasts.sources[].transcript_method` | `podscripts` | `podscripts` or `rss_deepgram` |
+| `podcasts.sources[].rss_url` | — | Required when `transcript_method` is `rss_deepgram` |
+| `deepgram.api_key` | — | Deepgram API key (or use `DEEPGRAM_API_KEY`) |
+| `deepgram.model` | `nova-2` | Deepgram transcription model |
+| `deepgram.segment_seconds` | `600` | Audio chunk size passed to `ffmpeg` |
 | `llm.provider` | `api` | `api` for OpenRouter/OpenAI-compatible, `ollama` for local |
 | `llm.model` | — | Model name (e.g. `qwen/qwen3.5-9b` for OpenRouter) |
 | `llm.timeout` | `360` | LLM request timeout in seconds |
@@ -74,6 +107,7 @@ Per-source overrides: `max_pages_per_scan`, `max_transcript_chars`, and `confide
 ```
 main.py          — entry point, polling loop
 scraper.py       — fetches and parses podscripts.co HTML
+deepgram_transcriber.py — RSS enclosure download + chunked Deepgram transcription
 analyzer.py      — LLM client, single-pass transcript analysis
 notifier.py      — formats and sends Telegram digest messages
 db.py            — SQLite episode tracking, reads users from telegram-channel-monitor

@@ -28,7 +28,7 @@ def render_message(
             f"{icon} <b>{escape(t['symbol'])}</b> — {escape(thesis)}"
         )
 
-    tickers_block = "\n".join(ticker_lines) if ticker_lines else "  (no specific tickers)"
+    tickers_block = "\n\n".join(ticker_lines) if ticker_lines else "  (no specific tickers)"
 
     return (
         f"🎙 <b>{escape(podcast_name)}</b>\n"
