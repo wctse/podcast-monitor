@@ -10,7 +10,7 @@ import yaml
 from analyzer import LLMAnalyzer
 from db import has_any_episodes, init_db, is_processed, load_bot_users, mark_processed
 from deepgram_transcriber import DeepgramCreditsError, DeepgramTranscriber
-from notifier import send_seed_report, send_signal
+from notifier import prefix_admin_only_message, send_seed_report, send_signal
 from scraper import (
     extract_episode_links,
     extract_rss_episode_items,
@@ -159,7 +159,9 @@ async def _scan_podcast(
                 if admin_chat_id:
                     await bot.send_message(
                         chat_id=admin_chat_id,
-                        text="⚠️ <b>Deepgram out of credits</b> — podcast transcription paused. Top up your account to resume.",
+                        text=prefix_admin_only_message(
+                            "⚠️ <b>Deepgram out of credits</b> — podcast transcription paused. Top up your account to resume."
+                        ),
                         parse_mode="HTML",
                     )
                 return
@@ -341,7 +343,9 @@ async def main():
         if admin_chat_id:
             await bot.send_message(
                 chat_id=admin_chat_id,
-                text="⚠️ <b>Deepgram API key missing</b> — rss_deepgram sources will be skipped until set.",
+                text=prefix_admin_only_message(
+                    "⚠️ <b>Deepgram API key missing</b> — rss_deepgram sources will be skipped until set."
+                ),
                 parse_mode="HTML",
             )
 

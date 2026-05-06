@@ -4,10 +4,15 @@ from html import escape
 logger = logging.getLogger(__name__)
 
 _BIAS_ICON = {"bullish": "🟢", "bearish": "🔴", "neutral": "⚪"}
+_ADMIN_ONLY_PREFIX = "🔒 <b>[ADMIN ONLY]</b>\n"
 
 
 def _bias_icon(bias: str) -> str:
     return _BIAS_ICON.get(bias.lower(), "⚪")
+
+
+def prefix_admin_only_message(message: str) -> str:
+    return f"{_ADMIN_ONLY_PREFIX}{message}"
 
 
 def render_message(
@@ -77,7 +82,7 @@ async def send_seed_report(
         lines.append(f"... and {len(episode_urls) - 20} more")
     lines.append("\nMonitoring is now active. New episodes will be analyzed and forwarded.")
 
-    message = "\n".join(lines)
+    message = prefix_admin_only_message("\n".join(lines))
     try:
         await bot.send_message(chat_id=admin_chat_id, text=message, parse_mode="HTML")
         logger.info("Sent seed report to admin chat_id=%d", admin_chat_id)
