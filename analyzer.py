@@ -1,10 +1,15 @@
 import asyncio
 import json
 import logging
+import random
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
+
+
+class _RetryableLLMError(RuntimeError):
+    pass
 
 DEFAULT_PROMPT = """
 You are an investment research assistant analyzing a podcast transcript.
@@ -43,6 +48,13 @@ class LLMAnalyzer:
         self.api_key = llm_cfg.get("api_key") or ""
         self.timeout_seconds = int(llm_cfg.get("timeout", 180))
         self.prompt = llm_cfg.get("prompt", DEFAULT_PROMPT)
+        self.retry_max_attempts = max(1, int(llm_cfg.get("retry_max_attempts", 3)))
+        self.retry_backoff_base_seconds = float(llm_cfg.get("retry_backoff_base_seconds", 1.0))
+        self.retry_backoff_max_seconds = float(llm_cfg.get("retry_backoff_max_seconds", 8.0))
+        self.retry_backoff_jitter_seconds = float(llm_cfg.get("retry_backoff_jitter_seconds", 0.25))
+        self.retry_status_codes = {
+            int(x) for x in llm_cfg.get("retry_status_codes", [408, 409, 425, 429, 500, 502, 503, 504, 529])
+        }
         self._session: aiohttp.ClientSession | None = None
 
     async def open(self, connector: aiohttp.BaseConnector | None = None):
@@ -62,20 +74,50 @@ class LLMAnalyzer:
         if episode_title:
             user_content = f"Episode: {episode_title}\n\n{transcript}"
 
-        for attempt in range(2):
+        for attempt in range(1, self.retry_max_attempts + 1):
             try:
                 raw = await self._call(user_content)
-                if raw:
-                    return self._parse(raw)
-            except asyncio.TimeoutError:
-                if attempt == 0:
-                    logger.warning("LLM timed out (attempt 1), retrying...")
-                else:
-                    logger.error("LLM timed out after 2 attempts")
+                if not raw:
+                    return None
+
+                parsed = self._parse(raw)
+                if parsed:
+                    return parsed
+
+                raise _RetryableLLMError("invalid JSON response")
+            except (aiohttp.ClientError, asyncio.TimeoutError, _RetryableLLMError) as e:
+                reason = str(e) or e.__class__.__name__
+                if attempt >= self.retry_max_attempts:
+                    logger.error(
+                        "LLM failed after %d attempt(s): %s",
+                        self.retry_max_attempts,
+                        reason,
+                    )
+                    return None
+
+                delay = self._retry_delay_seconds(attempt)
+                logger.warning(
+                    "LLM attempt %d/%d failed (%s); retrying in %.2fs",
+                    attempt,
+                    self.retry_max_attempts,
+                    reason,
+                    delay,
+                )
+                await asyncio.sleep(delay)
             except Exception as e:
                 logger.error("LLM error: %r", e)
                 return None
         return None
+
+    def _retry_delay_seconds(self, attempt: int) -> float:
+        delay = self.retry_backoff_base_seconds * (2 ** (attempt - 1))
+        delay = min(delay, self.retry_backoff_max_seconds)
+        if self.retry_backoff_jitter_seconds > 0:
+            delay += random.uniform(0.0, self.retry_backoff_jitter_seconds)
+        return delay
+
+    def _is_retryable_status(self, status_code: int) -> bool:
+        return status_code in self.retry_status_codes
 
     async def _call(self, user_content: str) -> str | None:
         headers = {"Content-Type": "application/json"}
@@ -98,10 +140,16 @@ class LLMAnalyzer:
             }
             async with self._session.post(url, json=payload, headers=headers) as resp:
                 if resp.status != 200:
-                    logger.error("LLM API error %d: %s", resp.status, await resp.text())
+                    error_text = await resp.text()
+                    if self._is_retryable_status(resp.status):
+                        raise _RetryableLLMError(f"HTTP {resp.status}: {error_text[:200]}")
+                    logger.error("LLM API error %d: %s", resp.status, error_text)
                     return None
                 data = await resp.json()
-            return data.get("message", {}).get("content", "")
+            content = data.get("message", {}).get("content", "")
+            if not content:
+                raise _RetryableLLMError("empty response content")
+            return content
 
         # OpenAI-compatible: stream to avoid proxy timeouts on long transcripts
         url = f"{self.base_url}/chat/completions"
@@ -113,7 +161,10 @@ class LLMAnalyzer:
         }
         async with self._session.post(url, json=payload, headers=headers) as resp:
             if resp.status != 200:
-                logger.error("LLM API error %d: %s", resp.status, await resp.text())
+                error_text = await resp.text()
+                if self._is_retryable_status(resp.status):
+                    raise _RetryableLLMError(f"HTTP {resp.status}: {error_text[:200]}")
+                logger.error("LLM API error %d: %s", resp.status, error_text)
                 return None
             parts: list[str] = []
             async for raw_line in resp.content:
@@ -129,7 +180,10 @@ class LLMAnalyzer:
                         parts.append(text)
                 except (json.JSONDecodeError, IndexError):
                     continue
-        return "".join(parts) or None
+        content = "".join(parts)
+        if not content:
+            raise _RetryableLLMError("empty streaming response")
+        return content
 
     @staticmethod
     def _parse(content: str) -> dict | None:
