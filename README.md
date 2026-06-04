@@ -2,14 +2,14 @@
 
 Polls podcast sources for new episodes, extracts transcripts, runs them through an LLM to extract investment signals, and forwards results to Telegram.
 
-Companion to [Telegram Channel Monitor](https://github.com/wctse/Telegram-channel-monitor). Shares the same bot and registered users — anyone who signed up there receives podcast alerts here too, with no separate registration.
+Companion to [Telegram Channel Monitor](https://github.com/wctse/Telegram-channel-monitor). Uses the same bot token, but sends podcast alerts only to the configured Telegram channel.
 
 ## How it works
 
 1. Polls configured podcast sources (Podscripts or RSS)
 2. Extracts transcripts via the source's configured method
 3. Sends the full transcript to an LLM (OpenRouter or Ollama) for single-pass analysis
-4. Forwards a digest to all registered Telegram users if the confidence threshold is met
+4. Forwards a digest to `telegram.target_channel_id` if the confidence threshold is met
 
 On first run, all existing episodes are seeded as processed without analysis to prevent a historical flood.
 
@@ -31,7 +31,7 @@ Fill in `config.yaml`:
 
 - `llm.api_key` — your OpenRouter (or compatible) API key
 - `telegram.bot_token` — the same bot token used by Telegram Channel Monitor
-- `telegram.users_db_path` — path to the telegram-channel-monitor `messages.db` (default: `../telegram-channel-monitor/data/messages.db`)
+- `telegram.target_channel_id` — the Telegram channel ID that receives all normal outbound alerts
 
 **3. Add podcast sources**
 
@@ -96,9 +96,8 @@ python main.py
 | `llm.provider` | `api` | `api` for OpenRouter/OpenAI-compatible, `ollama` for local |
 | `llm.model` | — | Model name (e.g. `qwen/qwen3.5-9b` for OpenRouter) |
 | `llm.timeout` | `360` | LLM request timeout in seconds |
-| `telegram.users_db_path` | — | Path to telegram-channel-monitor DB to inherit registered users |
-| `admin.chat_id` | `null` | Your personal Telegram chat ID (find via @userinfobot) |
-| `admin.admin_only` | `false` | When `true`, only the admin receives signals — useful while testing before broadcasting |
+| `telegram.target_channel_id` | — | Telegram channel ID for all normal outbound messages |
+| `admin.chat_id` | `null` | Optional admin command authorization chat ID if bot commands are added |
 
 Per-source overrides: `max_pages_per_scan`, `max_transcript_chars`, and `confidence_threshold` can all be set on individual sources to override the top-level defaults.
 
@@ -110,7 +109,7 @@ scraper.py       — fetches and parses podscripts.co HTML
 deepgram_transcriber.py — RSS enclosure download + chunked Deepgram transcription
 analyzer.py      — LLM client, single-pass transcript analysis
 notifier.py      — formats and sends Telegram digest messages
-db.py            — SQLite episode tracking, reads users from telegram-channel-monitor
+db.py            — SQLite episode tracking
 config.yaml      — your local config (gitignored)
 config.yaml.example
 requirements.txt

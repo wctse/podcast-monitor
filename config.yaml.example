@@ -36,19 +36,11 @@ deepgram:
 
 telegram:
   bot_token: ""  # same token as telegram-channel-monitor
-
-  # Option A (recommended): point at the telegram-channel-monitor DB to share registered users
-  users_db_path: "../telegram-channel-monitor/data/messages.db"
-
-  # Option B: hardcode chat IDs directly (used if users_db_path is absent or not found)
-  # chat_ids:
-  #   - 123456789
+  target_channel_id: null  # Telegram channel ID for all normal outbound messages
 
 
 admin:
   chat_id: null        # Your personal Telegram chat ID (find it via @userinfobot)
-  admin_only: false    # If true, only send signals to admin — not all registered users
-                       # Useful when setting up or testing before broadcasting to everyone
 
 
 data:

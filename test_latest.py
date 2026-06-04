@@ -1,7 +1,7 @@
 """One-shot test: fetch and analyze the most recent episode of each configured podcast.
 
 Uses a temporary DB so production episode history is not affected.
-Results sent according to config (admin_only: true → admin only).
+Results sent to telegram.target_channel_id only.
 """
 import asyncio
 import logging
@@ -39,11 +39,8 @@ async def run():
     from telegram import Bot
     bot = Bot(token=cfg["telegram"]["bot_token"])
     chat_ids = m._resolve_chat_ids(cfg)
-    admin_chat_id = cfg.get("admin", {}).get("chat_id")
-    if admin_chat_id:
-        admin_chat_id = int(admin_chat_id)
 
-    logger.info("Sending to %d chat ID(s): %s", len(chat_ids), chat_ids)
+    logger.info("Sending to %d target channel(s): %s", len(chat_ids), chat_ids)
 
     podcasts_cfg = cfg.get("podcasts", {})
     sources = [p for p in podcasts_cfg.get("sources", []) if p.get("enabled", True)]
