@@ -17,10 +17,11 @@ llm:
   model: "qwen/qwen3.5-9b"
   api_key: ""                            # or set OPENROUTER_API_KEY env var and read below
   timeout: 180                           # longer than Telegram monitor — full transcripts are big
+  prompt_file: "prompt.txt"             # private prompt file (gitignored); falls back to prompt/example/default
 
-  # Optional: override the analysis prompt
+  # Optional fallback if prompt_file does not exist
   # prompt: |
-  #   You are an investment research assistant...
+  #   Analyze transcript and return JSON...
 
 
 deepgram:

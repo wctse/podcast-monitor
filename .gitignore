@@ -1,5 +1,6 @@
 # Sensitive config (contains bot token and API key)
 config.yaml
+prompt.txt
 
 # Database
 data/

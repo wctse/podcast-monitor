@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import random
 
 import aiohttp
@@ -12,19 +13,9 @@ class _RetryableLLMError(RuntimeError):
     pass
 
 DEFAULT_PROMPT = """
-You are an investment research assistant analyzing a podcast transcript.
+Analyze this podcast transcript for concrete investment views.
 
-Scan the ENTIRE transcript and extract every specific investment view discussed:
-- Tickers or assets with a directional bias (bullish or bearish)
-- The specific reasoning or catalyst behind each view
-- Any price targets, timeframes, or risk factors mentioned
-
-Rules:
-- Only include views with SPECIFIC reasoning. Skip vague sentiment ("markets look good").
-- A single episode may contain many different ideas — capture all of them.
-- Bias must be one of: "bullish", "bearish", or "neutral".
-
-Respond ONLY with valid JSON (no markdown, no code fences):
+Return ONLY valid JSON (no markdown, no code fences):
 {
   "is_signal": true/false,
   "confidence": 0.0-1.0,
@@ -37,7 +28,32 @@ Respond ONLY with valid JSON (no markdown, no code fences):
     }
   ]
 }
+
+Rules:
+- Include only views with specific reasoning from the transcript.
+- Bias must be one of: "bullish", "bearish", or "neutral".
+- If no concrete view exists, set "is_signal" to false and "tickers" to [].
 """.strip()
+
+
+def _load_prompt_from_file(path: str) -> str | None:
+    resolved = os.path.expanduser(path)
+    if not os.path.exists(resolved):
+        return None
+
+    try:
+        with open(resolved, encoding="utf-8") as f:
+            prompt = f.read().strip()
+    except OSError as e:
+        logger.warning("Failed to read prompt file %s: %s", resolved, e)
+        return None
+
+    if not prompt:
+        logger.warning("Prompt file %s is empty; using fallback prompt", resolved)
+        return None
+
+    logger.info("Loaded LLM prompt from %s", resolved)
+    return prompt
 
 
 class LLMAnalyzer:
@@ -47,7 +63,9 @@ class LLMAnalyzer:
         self.model = llm_cfg["model"]
         self.api_key = llm_cfg.get("api_key") or ""
         self.timeout_seconds = int(llm_cfg.get("timeout", 180))
-        self.prompt = llm_cfg.get("prompt", DEFAULT_PROMPT)
+        self.prompt_file = str(llm_cfg.get("prompt_file", "prompt.txt")).strip()
+        file_prompt = _load_prompt_from_file(self.prompt_file) if self.prompt_file else None
+        self.prompt = file_prompt or llm_cfg.get("prompt", DEFAULT_PROMPT)
         self.retry_max_attempts = max(1, int(llm_cfg.get("retry_max_attempts", 3)))
         self.retry_backoff_base_seconds = float(llm_cfg.get("retry_backoff_base_seconds", 1.0))
         self.retry_backoff_max_seconds = float(llm_cfg.get("retry_backoff_max_seconds", 8.0))

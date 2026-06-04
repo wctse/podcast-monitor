@@ -1,0 +1,20 @@
+Analyze this podcast transcript for concrete investment views.
+
+Return ONLY valid JSON (no markdown, no code fences):
+{
+  "is_signal": true/false,
+  "confidence": 0.0-1.0,
+  "summary": "one sentence describing the episode's main investment themes",
+  "tickers": [
+    {
+      "symbol": "BTC",
+      "bias": "bullish",
+      "thesis": "one sentence: the specific reasoning from the transcript"
+    }
+  ]
+}
+
+Rules:
+- Include only views with specific reasoning from the transcript.
+- Bias must be one of: "bullish", "bearish", or "neutral".
+- If no concrete view exists, set "is_signal" to false and "tickers" to [].

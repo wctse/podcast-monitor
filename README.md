@@ -25,14 +25,18 @@ pip install -r requirements.txt
 
 ```bash
 cp config.yaml.example config.yaml
+cp prompt.example prompt.txt
 ```
 
 Fill in `config.yaml`:
 
 - `llm.api_key` — your OpenRouter (or compatible) API key
+- `llm.prompt_file` — defaults to `prompt.txt` (kept private via `.gitignore`)
 - `telegram.bot_token` — the same bot token used by Telegram Channel Monitor
 - `telegram.target_channel_id` — the Telegram channel ID that receives normal signals
 - `admin.chat_id` — the admin chat ID that receives seed reports and enabled error alerts
+
+Edit `prompt.txt` with your production prompt. `prompt.example` is a simplified public template you can safely commit.
 
 **3. Add podcast sources**
 
@@ -62,7 +66,7 @@ podcasts:
       confidence_threshold: 0.7
 
 deepgram:
-  api_key: "6b97067ee132a7f05053e7e593e5d685b418b103"
+  api_key: "<YOUR_DEEPGRAM_API_KEY>"
   model: "nova-2"
   language: "en"
   segment_seconds: 600
@@ -97,6 +101,7 @@ python main.py
 | `llm.provider` | `api` | `api` for OpenRouter/OpenAI-compatible, `ollama` for local |
 | `llm.model` | — | Model name (e.g. `qwen/qwen3.5-9b` for OpenRouter) |
 | `llm.timeout` | `360` | LLM request timeout in seconds |
+| `llm.prompt_file` | `prompt.txt` | Prompt text file path (recommended for private/proprietary prompts) |
 | `telegram.target_channel_id` | — | Telegram channel ID for normal signals |
 | `admin.chat_id` | `null` | Admin chat ID for seed reports and enabled error alerts |
 | `error_alerts.enabled` | `false` | When `true`, send system error alerts to `admin.chat_id` |
@@ -114,5 +119,7 @@ notifier.py      — formats and sends Telegram digest messages
 db.py            — SQLite episode tracking
 config.yaml      — your local config (gitignored)
 config.yaml.example
+prompt.txt       — your private production prompt (gitignored)
+prompt.example   — simplified prompt template (committed)
 requirements.txt
 ```
