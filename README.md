@@ -2,7 +2,7 @@
 
 Polls podcast sources for new episodes, extracts transcripts, runs them through an LLM to extract investment signals, and forwards results to Telegram.
 
-Companion to [Telegram Channel Monitor](https://github.com/wctse/Telegram-channel-monitor). Uses the same bot token, but sends podcast alerts only to the configured Telegram channel.
+Companion to [Telegram Channel Monitor](https://github.com/wctse/Telegram-channel-monitor). Uses the same bot token, but sends normal podcast signals only to the configured Telegram channel.
 
 ## How it works
 
@@ -31,7 +31,8 @@ Fill in `config.yaml`:
 
 - `llm.api_key` — your OpenRouter (or compatible) API key
 - `telegram.bot_token` — the same bot token used by Telegram Channel Monitor
-- `telegram.target_channel_id` — the Telegram channel ID that receives all normal outbound alerts
+- `telegram.target_channel_id` — the Telegram channel ID that receives normal signals
+- `admin.chat_id` — the admin chat ID that receives seed reports and enabled error alerts
 
 **3. Add podcast sources**
 
@@ -96,8 +97,9 @@ python main.py
 | `llm.provider` | `api` | `api` for OpenRouter/OpenAI-compatible, `ollama` for local |
 | `llm.model` | — | Model name (e.g. `qwen/qwen3.5-9b` for OpenRouter) |
 | `llm.timeout` | `360` | LLM request timeout in seconds |
-| `telegram.target_channel_id` | — | Telegram channel ID for all normal outbound messages |
-| `admin.chat_id` | `null` | Optional admin command authorization chat ID if bot commands are added |
+| `telegram.target_channel_id` | — | Telegram channel ID for normal signals |
+| `admin.chat_id` | `null` | Admin chat ID for seed reports and enabled error alerts |
+| `error_alerts.enabled` | `false` | When `true`, send system error alerts to `admin.chat_id` |
 
 Per-source overrides: `max_pages_per_scan`, `max_transcript_chars`, and `confidence_threshold` can all be set on individual sources to override the top-level defaults.
 

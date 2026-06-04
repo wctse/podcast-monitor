@@ -43,5 +43,9 @@ admin:
   chat_id: null        # Your personal Telegram chat ID (find it via @userinfobot)
 
 
+error_alerts:
+  enabled: false       # If true, send system error alerts to admin.chat_id
+
+
 data:
   db_path: "data/episodes.db"   # episode deduplication DB (separate from telegram-channel-monitor)

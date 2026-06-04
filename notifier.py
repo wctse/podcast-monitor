@@ -69,11 +69,11 @@ async def send_signal(
 
 async def send_seed_report(
     bot,
-    target_chat_id: int,
+    admin_chat_id: int,
     podcast_name: str,
     episode_urls: list[str],
 ):
-    """Send a first-seeding summary to the configured channel."""
+    """Send a first-seeding summary to the admin."""
     lines = [f"🌱 <b>First scan: {escape(podcast_name)}</b>"]
     lines.append(f"Seeded {len(episode_urls)} existing episode(s) — these will not be analyzed.\n")
     for url in episode_urls[:20]:
@@ -84,7 +84,22 @@ async def send_seed_report(
 
     message = prefix_admin_only_message("\n".join(lines))
     try:
-        await bot.send_message(chat_id=target_chat_id, text=message, parse_mode="HTML")
-        logger.info("Sent seed report to chat_id=%d", target_chat_id)
+        await bot.send_message(chat_id=admin_chat_id, text=message, parse_mode="HTML")
+        logger.info("Sent seed report to admin chat_id=%d", admin_chat_id)
     except Exception as e:
-        logger.error("Failed to send seed report: %s", e)
+        logger.error("Failed to send seed report to admin: %s", e)
+
+
+async def send_error_alert(bot, admin_chat_id: int | None, message: str):
+    if not admin_chat_id:
+        logger.warning("No admin chat ID configured — error alert not sent")
+        return
+    try:
+        await bot.send_message(
+            chat_id=admin_chat_id,
+            text=prefix_admin_only_message(message),
+            parse_mode="HTML",
+        )
+        logger.info("Sent error alert to admin chat_id=%d", admin_chat_id)
+    except Exception as e:
+        logger.error("Failed to send error alert to admin: %s", e)

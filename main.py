@@ -10,7 +10,7 @@ import yaml
 from analyzer import LLMAnalyzer
 from db import has_any_episodes, init_db, is_processed, mark_processed
 from deepgram_transcriber import DeepgramCreditsError, DeepgramTranscriber
-from notifier import prefix_admin_only_message, send_seed_report, send_signal
+from notifier import send_error_alert, send_seed_report, send_signal
 from scraper import (
     extract_episode_links,
     extract_rss_episode_items,
@@ -36,12 +36,12 @@ def _resolve_chat_ids(cfg: dict) -> list[int]:
     tg = cfg.get("telegram", {})
     target_channel_id = tg.get("target_channel_id")
     if target_channel_id in (None, ""):
-        logger.warning("telegram.target_channel_id is missing — Telegram messages will not be sent")
+        logger.warning("telegram.target_channel_id is missing — normal Telegram signals will not be sent")
         return []
     try:
         return [int(target_channel_id)]
     except (TypeError, ValueError):
-        logger.warning("telegram.target_channel_id is invalid: %r — Telegram messages will not be sent", target_channel_id)
+        logger.warning("telegram.target_channel_id is invalid: %r — normal Telegram signals will not be sent", target_channel_id)
         return []
 
 
@@ -59,14 +59,14 @@ async def _seed_episodes(
     episodes: list[tuple[str, str]],
     db_path: str,
     bot,
-    chat_ids: list[int],
+    admin_chat_id: int | None,
 ) -> None:
     urls = [url for url, _ in episodes]
     logger.info("First scan for %s: seeding %d episode(s) without analyzing", name, len(episodes))
     for url, title in episodes:
         mark_processed(slug, url, title, 0, db_path)
-    for chat_id in chat_ids:
-        await send_seed_report(bot, chat_id, name, urls)
+    if admin_chat_id:
+        await send_seed_report(bot, admin_chat_id, name, urls)
 
 
 async def _scan_podcast(
@@ -78,6 +78,8 @@ async def _scan_podcast(
     deepgram_transcriber: DeepgramTranscriber | None,
     bot,
     chat_ids: list[int],
+    admin_chat_id: int | None = None,
+    error_alerts_enabled: bool = False,
 ):
     slug = (podcast.get("slug") or "").strip().lower()
     if not slug:
@@ -118,7 +120,7 @@ async def _scan_podcast(
             await _seed_episodes(
                 slug, name,
                 [(item["episode_url"], item.get("episode_title", "")) for item in deduped_items],
-                db_path, bot, chat_ids,
+                db_path, bot, admin_chat_id,
             )
             return
 
@@ -146,13 +148,11 @@ async def _scan_podcast(
                 )
             except DeepgramCreditsError:
                 logger.error("Deepgram account is out of credits — halting transcription for this scan")
-                for chat_id in chat_ids:
-                    await bot.send_message(
-                        chat_id=chat_id,
-                        text=prefix_admin_only_message(
-                            "⚠️ <b>Deepgram out of credits</b> — podcast transcription paused. Top up your account to resume."
-                        ),
-                        parse_mode="HTML",
+                if error_alerts_enabled:
+                    await send_error_alert(
+                        bot,
+                        admin_chat_id,
+                        "⚠️ <b>Deepgram out of credits</b> — podcast transcription paused. Top up your account to resume.",
                     )
                 return
         return
@@ -172,7 +172,7 @@ async def _scan_podcast(
     deduped = list(dict.fromkeys(episode_urls))
 
     if not has_any_episodes(slug, db_path):
-        await _seed_episodes(slug, name, [(url, "") for url in deduped], db_path, bot, chat_ids)
+        await _seed_episodes(slug, name, [(url, "") for url in deduped], db_path, bot, admin_chat_id)
         return
 
     new_urls = [u for u in deduped if not is_processed(slug, u, db_path)]
@@ -312,8 +312,12 @@ async def main():
     from telegram import Bot
     bot = Bot(token=cfg["telegram"]["bot_token"])
     chat_ids = _resolve_chat_ids(cfg)
+    admin_chat_id = cfg.get("admin", {}).get("chat_id")
+    if admin_chat_id:
+        admin_chat_id = int(admin_chat_id)
+    error_alerts_enabled = bool(cfg.get("error_alerts", {}).get("enabled", False))
     if not chat_ids:
-        logger.warning("No target channel configured — Telegram messages will not be sent")
+        logger.warning("No target channel configured — normal Telegram signals will not be sent")
 
     podcasts_cfg = cfg.get("podcasts", {})
     sources = [p for p in podcasts_cfg.get("sources", []) if p.get("enabled", True)]
@@ -326,13 +330,11 @@ async def main():
 
     if deepgram_transcriber and not deepgram_transcriber.api_key:
         logger.error("Deepgram API key is missing. rss_deepgram sources will not be transcribed.")
-        for chat_id in chat_ids:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=prefix_admin_only_message(
-                    "⚠️ <b>Deepgram API key missing</b> — rss_deepgram sources will be skipped until set."
-                ),
-                parse_mode="HTML",
+        if error_alerts_enabled:
+            await send_error_alert(
+                bot,
+                admin_chat_id,
+                "⚠️ <b>Deepgram API key missing</b> — rss_deepgram sources will be skipped until set.",
             )
 
     if not sources:
@@ -362,6 +364,8 @@ async def main():
                         await _scan_podcast(
                             session, podcast, podcasts_cfg, db_path,
                             analyzer, deepgram_transcriber, bot, chat_ids,
+                            admin_chat_id=admin_chat_id,
+                            error_alerts_enabled=error_alerts_enabled,
                         )
                     except Exception as e:
                         logger.error("Scan failed for %s: %r", podcast.get("name"), e, exc_info=True)

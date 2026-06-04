@@ -1,7 +1,7 @@
 import asyncio
 
 import main
-from notifier import send_signal
+from notifier import send_error_alert, send_seed_report, send_signal
 
 
 class RecordingBot:
@@ -59,5 +59,31 @@ def test_send_signal_missing_target_channel_sends_nothing():
     analysis = {"confidence": 0.9, "summary": "Signal summary", "tickers": []}
 
     asyncio.run(send_signal(bot, [], "Podcast", "Episode", "https://example.com", analysis))
+
+    assert bot.messages == []
+
+
+def test_send_seed_report_sends_to_admin_chat_id():
+    bot = RecordingBot()
+
+    asyncio.run(send_seed_report(bot, 115436546, "Podcast", ["https://example.com/episode"]))
+
+    assert [message["chat_id"] for message in bot.messages] == [115436546]
+    assert bot.messages[0]["parse_mode"] == "HTML"
+
+
+def test_send_error_alert_sends_to_admin_chat_id():
+    bot = RecordingBot()
+
+    asyncio.run(send_error_alert(bot, 115436546, "⚠️ <b>Error</b>"))
+
+    assert [message["chat_id"] for message in bot.messages] == [115436546]
+    assert bot.messages[0]["parse_mode"] == "HTML"
+
+
+def test_send_error_alert_without_admin_chat_id_sends_nothing():
+    bot = RecordingBot()
+
+    asyncio.run(send_error_alert(bot, None, "⚠️ <b>Error</b>"))
 
     assert bot.messages == []
